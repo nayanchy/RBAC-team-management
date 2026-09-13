@@ -64,14 +64,14 @@ export async function POST(request: NextRequest) {
     });
 
     //  Generate Token
-    const token = await generateToken(user.id);
+    const token = generateToken(user.id);
 
     // Create Response
     const response = NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
-        emai: user.email,
+        email: user.email,
         role: user.role,
         teamId: user.teamId,
         team: user.team,
