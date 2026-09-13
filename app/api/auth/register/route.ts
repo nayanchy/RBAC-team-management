@@ -1,34 +1,33 @@
 import { generateToken, hashPassword } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/db";
-import { Role } from "@/app/types";
+import { Role } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   try {
     const { name, email, password, teamCode } = await request.json();
 
-    // Validate the input data
+    // Validating the input data
     if (!name || !email || !password) {
       return NextResponse.json(
-        {
-          error: "Name, email, and password are required or not valid",
-        },
+        { error: "Name, email, and password are required or not valid" },
         { status: 400 },
       );
     }
 
-    //   Find if the user already exists
+    // Find if the user exists
     const existingUser = await prisma.user.findUnique({
       where: { email: email },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "User already exists with this email" },
+        { error: "The user already exists with the same email" },
         { status: 409 },
       );
     }
 
+    // Check the team
     let teamId: string | undefined;
 
     if (teamCode) {
@@ -37,20 +36,18 @@ export async function POST(request: NextRequest) {
       });
 
       if (!team) {
-        return NextResponse.json(
-          { error: "Team not found with this code" },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: "Team not found" }, { status: 400 });
       }
 
       teamId = team.id;
     }
 
+    // Hash the password
     const hashedPassword = await hashPassword(password);
 
-    // First user becomes ADMIN, others become USER
-    const userCount = await prisma.user.count();
+    // First user becomes ADMIN and the rest become USER
 
+    const userCount = await prisma.user.count();
     const role = userCount === 0 ? Role.ADMIN : Role.USER;
 
     const user = await prisma.user.create({
@@ -66,15 +63,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Generate Token
-    const token = generateToken(user.id);
+    //  Generate Token
+    const token = await generateToken(user.id);
 
-    //  Create response
+    // Create Response
     const response = NextResponse.json({
       user: {
         id: user.id,
-        email: user.email,
         name: user.name,
+        emai: user.email,
         role: user.role,
         teamId: user.teamId,
         team: user.team,
@@ -82,7 +79,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Set cookie
+    // Set cookies
     response.cookies.set("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -91,13 +88,10 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (err) {
-    console.error("Registration Failed:" + err);
-
+  } catch (error) {
+    console.error("Failed to register user:", error);
     return NextResponse.json(
-      {
-        error: "Internal server error, something went wrong",
-      },
+      { error: "Failed to register user" },
       { status: 500 },
     );
   }
